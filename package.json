@@ -1,0 +1,14 @@
+{
+  "name": "pi-agent-system-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Extension-first Pi agent system with YAML-defined agents and permissions.",
+  "main": "index.ts",
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
