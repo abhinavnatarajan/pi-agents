@@ -174,13 +174,13 @@ Only pursue these after the extension prototype exposes concrete limitations.
 
 ## Phase 8: Documentation and examples
 
-- [ ] Document agent YAML schema.
-- [ ] Document wildcard default rules.
-- [ ] Document merge semantics.
-- [ ] Document permission rule semantics.
-- [ ] Document default `General` agent.
-- [ ] Document `ask` behavior and limitations.
-- [ ] Document security limitations and sandbox recommendation.
+- [x] Document agent YAML schema.
+- [x] Document wildcard default rules.
+- [x] Document merge semantics.
+- [x] Document permission rule semantics.
+- [x] Document default `General` agent.
+- [x] Document `ask` behavior and limitations.
+- [x] Document security limitations and sandbox recommendation.
 - [ ] Provide example `General` agent YAML.
 - [ ] Provide example `Planner` read-only agent YAML.
 - [ ] Provide example `Reviewer` agent with selected skills.
