@@ -16,7 +16,7 @@ This TODO tracks planning and later implementation of the Pi agent system. It is
 ## Phase 1: Semantic decisions
 
 - [x] Confirm agent YAML locations:
-  - global `~/.pi/agent/agents/*.yml`
+  - global `$PI_CODING_AGENT_DIR/agents/*.yml`
   - project `<cwd>/.pi/agents/*.yml`
 - [x] Confirm active agent persistence scope:
   - session-local via extension custom entry.

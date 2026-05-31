@@ -25,11 +25,11 @@ The system should be enforceable, reloadable, and usable from interactive TUI, p
 
 ## 3. Agent definition locations
 
-Agent definitions are YAML files.
+Agent definitions are YAML files. The global Pi agent directory should be resolved through Pi's configured agent directory, i.e. `$PI_CODING_AGENT_DIR` when set, rather than hardcoding `~/.pi/agent`.
 
 Proposed locations:
 
-- Global: `~/.pi/agent/agents/*.yml` and `~/.pi/agent/agents/*.yaml`
+- Global: `$PI_CODING_AGENT_DIR/agents/*.yml` and `$PI_CODING_AGENT_DIR/agents/*.yaml`
 - Project: `<cwd>/.pi/agents/*.yml` and `<cwd>/.pi/agents/*.yaml`
 
 Project definitions with the same canonical agent name merge into global definitions. Project-only agents are also allowed.

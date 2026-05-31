@@ -213,6 +213,8 @@ async function loadAgentConfig(cwd: string): Promise<LoadedConfig> {
 	const builtIn = builtInGeneralAgent();
 	agents.set(builtIn.canonicalName, builtIn);
 
+	// getAgentDir() is Pi's configured global agent directory. It respects
+	// PI_CODING_AGENT_DIR, so do not hardcode ~/.pi/agent here.
 	const globalDir = join(getAgentDir(), "agents");
 	const projectDir = join(cwd, ".pi", "agents");
 
