@@ -3,6 +3,7 @@ export const STATUS_KEY = "agent";
 
 export type Permission = "allow" | "ask" | "deny";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type AgentThinking = ThinkingLevel | "*";
 
 export type MatchSpec = string | string[] | { regex: string };
 
@@ -34,7 +35,7 @@ export interface AgentDefinition {
 	models?: {
 		default?: string;
 		fallbacks?: string[];
-		thinking?: ThinkingLevel;
+		thinking?: AgentThinking;
 	};
 	prompt?: string;
 	tools?: { rules?: Rule[] };

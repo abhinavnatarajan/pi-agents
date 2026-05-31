@@ -137,7 +137,7 @@ doomLoop:
 - `description`: required for UI display.
 - `models.default`: optional provider/model string. `"*"` means keep the currently selected model when switching to this agent.
 - `models.fallbacks`: optional ordered provider/model list. Ignored when `models.default` is `"*"`.
-- `models.thinking`: optional Pi thinking level.
+- `models.thinking`: optional Pi thinking level. `"*"` means keep the current thinking level unchanged.
 - `prompt`: optional agent-specific instructions appended to Pi's system prompt.
 - No separate `goals` field in V1. Goals can be written directly in `prompt`; the model would see both as the same prompt content, so a separate field adds schema complexity without clear benefit.
 - `tools.rules`: ordered tool permission rules. A wildcard `match: "*"` acts as the default rule.
@@ -193,7 +193,7 @@ When an agent becomes active:
 3. If `models.default` is an exact provider/model string and is available with credentials, select it.
 4. Otherwise try `models.fallbacks` in order.
 5. If none are available, keep the current model and notify the user.
-6. If `models.thinking` is set, apply it after model selection. Pi may clamp unsupported thinking levels.
+6. If `models.thinking` is set to a concrete level, apply it after model selection. Pi may clamp unsupported thinking levels. If it is `"*"`, keep the current thinking level unchanged.
 
 V1 model grammar is intentionally narrow:
 

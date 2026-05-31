@@ -125,7 +125,7 @@ Top-level fields:
 - `description` — required UI/list description.
 - `models.default` — optional exact `provider/model-id`, or `"*"` to keep the current model.
 - `models.fallbacks` — optional exact `provider/model-id` list. `"*"` is invalid here.
-- `models.thinking` — optional Pi thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`.
+- `models.thinking` — optional Pi thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `"*"` to keep the current thinking level unchanged.
 - `prompt` — optional agent instructions appended to Pi's system prompt.
 - `tools.rules` — ordered tool permission rules.
 - `skills.rules` — ordered skill permission rules.

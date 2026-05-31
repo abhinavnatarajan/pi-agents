@@ -106,7 +106,7 @@ Source discovery indicates V1 is feasible as an extension-first implementation b
 - [x] Implement non-interactive `/agents` no-argument behavior.
 - [x] Show active agent with `ctx.ui.setStatus("agent", "use agent: <name>")`.
 - [x] Apply selected agent to subsequent prompts even if switched while current agent run is active.
-- [x] Apply agent model and thinking level on switch, respecting `models.default: "*"`.
+- [x] Apply agent model and thinking level on switch, respecting `models.default: "*"` and `models.thinking: "*"`.
 - [x] Compute active tools from permission rules and call `pi.setActiveTools()` so denied-only tool definitions are not sent to the model.
 - [x] Inject agent prompt/permission summary in `before_agent_start`.
 - [x] Filter disallowed skill descriptions from system prompt in `before_agent_start`.

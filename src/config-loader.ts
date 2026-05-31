@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { builtInGeneralAgent } from "./default-agent.ts";
-import type { AgentDefinition, Diagnostic, LoadedAgent, LoadedConfig, MatchSpec, Rule, ThinkingLevel } from "./types.ts";
+import type { AgentDefinition, AgentThinking, Diagnostic, LoadedAgent, LoadedConfig, MatchSpec, Rule } from "./types.ts";
 import { canonicalizeAgentName, formatError, isPlainObject, loadYamlLibrary } from "./utils.ts";
 
 export async function loadAgentConfig(cwd: string): Promise<LoadedConfig> {
@@ -165,10 +165,10 @@ function validateModels(value: unknown, path: string, errors: Diagnostic[]): Age
 		}
 	}
 	if (value.thinking !== undefined) {
-		if (!["off", "minimal", "low", "medium", "high", "xhigh"].includes(String(value.thinking))) {
-			errors.push({ type: "error", path, message: "`models.thinking` must be one of off, minimal, low, medium, high, xhigh." });
+		if (!["*", "off", "minimal", "low", "medium", "high", "xhigh"].includes(String(value.thinking))) {
+			errors.push({ type: "error", path, message: "`models.thinking` must be `*` or one of off, minimal, low, medium, high, xhigh." });
 		} else {
-			result.thinking = value.thinking as ThinkingLevel;
+			result.thinking = value.thinking as AgentThinking;
 		}
 	}
 	return result;

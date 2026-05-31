@@ -54,7 +54,7 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 				ctx.ui.notify(`Agent "${agent.name}": no configured model/fallback is available; keeping current model.`, "warning");
 			}
 		}
-		if (agent.models?.thinking) {
+		if (agent.models?.thinking && agent.models.thinking !== "*") {
 			pi.setThinkingLevel(agent.models.thinking);
 		}
 		runtimeAppliedAgentKey = agent.canonicalName;
