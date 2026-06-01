@@ -1,5 +1,6 @@
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { expandPathLiteral, expandPathPattern, isPathField } from "./path-placeholders.ts";
 import type { ConditionSpec, Decision, LoadedAgent, MatchSpec, Permission, Rule, RunState } from "./types.ts";
 import { isPlainObject, safeJson } from "./utils.ts";
 
@@ -97,7 +98,7 @@ function conditionsMatch(when: Record<string, ConditionSpec> | undefined, input:
 		if (!isPlainObject(condition)) return false;
 		const field = typeof condition.field === "string" ? condition.field : conditionName;
 		const rawValue = getFieldValue(input, field);
-		if (!conditionMatches(condition, rawValue, ctx)) return false;
+		if (!conditionMatches(condition, rawValue, ctx, isPathField(field))) return false;
 	}
 	return true;
 }
@@ -114,7 +115,7 @@ function getFieldValue(input: Record<string, unknown>, field: string): unknown {
 	return current;
 }
 
-function conditionMatches(condition: ConditionSpec, rawValue: unknown, ctx: ExtensionContext): boolean {
+function conditionMatches(condition: ConditionSpec, rawValue: unknown, ctx: ExtensionContext, isPathCondition: boolean): boolean {
 	if (condition.exists !== undefined) {
 		const exists = rawValue !== undefined && rawValue !== null;
 		if (exists !== condition.exists) return false;
@@ -129,27 +130,40 @@ function conditionMatches(condition: ConditionSpec, rawValue: unknown, ctx: Exte
 		const executable = firstExecutableToken(String(rawValue ?? ""));
 		if (!executable || !condition.startsWithAny.includes(executable)) return false;
 	}
+	const comparableValue = comparableConditionValue(rawValue, ctx, isPathCondition);
 	if (condition.matchesAny) {
-		const value = String(rawValue ?? "");
-		if (!condition.matchesAny.some((pattern) => patternMatches(pattern, value))) return false;
+		if (!condition.matchesAny.some((pattern) => patternMatches(expandPatternForCondition(pattern, ctx, isPathCondition), comparableValue))) return false;
 	}
 	if (condition.notMatchesAny) {
-		const value = String(rawValue ?? "");
-		if (condition.notMatchesAny.some((pattern) => patternMatches(pattern, value))) return false;
+		if (condition.notMatchesAny.some((pattern) => patternMatches(expandPatternForCondition(pattern, ctx, isPathCondition), comparableValue))) return false;
 	}
-	if (condition.equals !== undefined && rawValue !== condition.equals) return false;
+	if (condition.equals !== undefined && comparableValue !== comparableExpectedValue(condition.equals, ctx, isPathCondition)) return false;
 	if (condition.contains !== undefined) {
-		if (typeof rawValue === "string") {
-			if (!rawValue.includes(String(condition.contains))) return false;
+		if (typeof rawValue === "string" || isPathCondition) {
+			if (!comparableValue.includes(String(comparableExpectedValue(condition.contains, ctx, isPathCondition)))) return false;
 		} else if (Array.isArray(rawValue)) {
 			if (!rawValue.includes(condition.contains)) return false;
 		} else {
 			return false;
 		}
 	}
-	if (condition.in !== undefined && !condition.in.includes(rawValue)) return false;
-	if (condition.matches !== undefined && !patternMatches(condition.matches, String(rawValue ?? ""))) return false;
+	if (condition.in !== undefined && !condition.in.map((value) => comparableExpectedValue(value, ctx, isPathCondition)).includes(comparableValue)) return false;
+	if (condition.matches !== undefined && !patternMatches(expandPatternForCondition(condition.matches, ctx, isPathCondition), comparableValue)) return false;
 	return true;
+}
+
+function comparableConditionValue(rawValue: unknown, ctx: ExtensionContext, isPathCondition: boolean): string {
+	if (!isPathCondition) return String(rawValue ?? "");
+	return normalizePermissionPath(String(rawValue ?? "."), ctx.cwd).replace(/\\/g, "/");
+}
+
+function comparableExpectedValue(expected: unknown, ctx: ExtensionContext, isPathCondition: boolean): unknown {
+	if (!isPathCondition || typeof expected !== "string") return expected;
+	return normalizePermissionPath(expandPathLiteral(expected, ctx), ctx.cwd).replace(/\\/g, "/");
+}
+
+function expandPatternForCondition(pattern: string, ctx: ExtensionContext, isPathCondition: boolean): string {
+	return isPathCondition ? expandPathPattern(pattern, ctx) : pattern;
 }
 
 function patternMatches(pattern: string, value: string): boolean {

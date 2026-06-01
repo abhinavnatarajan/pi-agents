@@ -286,6 +286,15 @@ Path checks must normalize paths safely:
 - For existing paths, prefer realpath/canonical resolution.
 - For non-existing paths, use absolute normalized resolution.
 - A path is inside cwd only if its relative path from cwd does not start with `..` and is not absolute.
+- Path pattern comparisons should use normalized absolute path strings.
+
+Path condition strings may use a limited set of placeholders at the start of the string:
+
+- `<env:home>`
+- `<env:pi_coding_agent_dir>`
+- `<env:pi_package_dir>`
+
+Placeholder expansion is not shell expansion. It runs only at the start of path condition strings and only when the placeholder is followed by `/`, `\\`, or the end of the string. A literal path beginning with a placeholder-like string can be escaped with a leading backslash, e.g. `'\<env:pi_package_dir>/literal'` in YAML. Unknown unescaped `<env:...>` prefixes in path conditions are invalid.
 
 ## 13. Bash command semantics
 
@@ -483,6 +492,7 @@ Invalid YAML files should not crash Pi.
 11. V1 active-tool exposure uses the backwards scan algorithm in section 10.
 12. V1 doom-loop detection uses generic stable JSON input only, with no tool-specific normalization.
 13. Agent switching during an in-flight run only updates display status immediately; permission/tool/skill/prompt/doom-loop semantics change on the next user input.
+14. Path condition strings support only explicit leading placeholders (`<env:home>`, `<env:pi_coding_agent_dir>`, `<env:pi_package_dir>`), not general shell expansion.
 
 ## 25. Source discovery findings
 

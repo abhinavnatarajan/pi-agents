@@ -180,7 +180,23 @@ Condition types supported in V1:
 
 All conditions in a rule are ANDed.
 
-Path checks strip a leading `@`, resolve relative paths against `ctx.cwd`, normalize the result, and then check containment in the current working directory.
+Path checks strip a leading `@`, resolve relative paths against `ctx.cwd`, normalize the result, and then check containment or patterns against the normalized absolute path.
+
+Path pattern placeholders are supported at the start of path condition strings in `matches`, `matchesAny`, `notMatchesAny`, `equals`, `contains`, and `in`:
+
+- `<env:home>` — the current user's home directory.
+- `<env:pi_coding_agent_dir>` — Pi's configured agent directory, respecting `PI_CODING_AGENT_DIR`.
+- `<env:pi_package_dir>` — the installed `@earendil-works/pi-coding-agent` package directory.
+
+Placeholders only expand at the beginning of a string and only when followed by `/`, `\\`, or end-of-string. Escape a literal leading placeholder with a backslash, and prefer single-quoted YAML strings for that case:
+
+```yaml
+matchesAny:
+  - '<env:pi_package_dir>/docs/.*'
+  - '\<env:pi_package_dir>/literal-name/.*'
+```
+
+Unknown unescaped `<env:...>` prefixes in path conditions are validation errors.
 
 ## Tool exposure vs enforcement
 

@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { builtInGeneralAgent } from "./default-agent.ts";
+import { validatePathRulePlaceholders } from "./path-placeholders.ts";
 import type { AgentDefinition, AgentThinking, Diagnostic, LoadedAgent, LoadedConfig, MatchSpec, Rule } from "./types.ts";
 import { canonicalizeAgentName, formatError, isPlainObject, loadYamlLibrary } from "./utils.ts";
 
@@ -225,13 +226,17 @@ function validateRule(value: unknown, label: string, path: string, errors: Diagn
 		errors.push({ type: "error", path, message: `\`${label}.mcp\` must be an object when present.` });
 		return undefined;
 	}
-	return {
+	const rule = {
 		match: value.match as MatchSpec,
 		permission: value.permission as Rule["permission"],
 		when: value.when as Record<string, any> | undefined,
 		mcp: value.mcp as { server?: string; tool?: string } | undefined,
 		reason: typeof value.reason === "string" ? value.reason : undefined,
 	};
+	for (const placeholderError of validatePathRulePlaceholders(rule)) {
+		errors.push({ type: "error", path, message: `\`${label}\`: ${placeholderError}` });
+	}
+	return rule;
 }
 
 function isValidMatchSpec(value: unknown): boolean {
