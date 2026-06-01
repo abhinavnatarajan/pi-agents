@@ -94,11 +94,10 @@ function stringFromUnknown(value: unknown): string | undefined {
 
 function conditionsMatch(when: Record<string, ConditionSpec> | undefined, input: Record<string, unknown>, ctx: ExtensionContext): boolean {
 	if (!when) return true;
-	for (const [conditionName, condition] of Object.entries(when)) {
-		if (!isPlainObject(condition)) return false;
-		const field = typeof condition.field === "string" ? condition.field : conditionName;
-		const rawValue = getFieldValue(input, field);
-		if (!conditionMatches(condition, rawValue, ctx, isPathField(field))) return false;
+	for (const condition of Object.values(when)) {
+		if (!isPlainObject(condition) || typeof condition.field !== "string") return false;
+		const rawValue = getFieldValue(input, condition.field);
+		if (!conditionMatches(condition, rawValue, ctx, isPathField(condition.field))) return false;
 	}
 	return true;
 }
@@ -108,7 +107,7 @@ function getFieldValue(input: Record<string, unknown>, field: string): unknown {
 	let current: unknown = input;
 	for (const part of parts) {
 		if (!isPlainObject(current) || !(part in current)) {
-			return field === "path" ? "." : undefined;
+			return undefined;
 		}
 		current = current[part];
 	}
@@ -120,8 +119,11 @@ function conditionMatches(condition: ConditionSpec, rawValue: unknown, ctx: Exte
 		const exists = rawValue !== undefined && rawValue !== null;
 		if (exists !== condition.exists) return false;
 	}
+	if (rawValue === undefined && hasNonExistsOperator(condition)) return false;
+	if (isPathCondition && rawValue === null && hasNonExistsOperator(condition)) return false;
+
 	if (condition.withinCwd !== undefined || condition.outsideCwd !== undefined) {
-		const normalized = normalizePermissionPath(String(rawValue ?? "."), ctx.cwd);
+		const normalized = normalizePermissionPath(String(rawValue), ctx.cwd);
 		const inside = isWithinCwd(normalized, ctx.cwd);
 		if (condition.withinCwd !== undefined && inside !== condition.withinCwd) return false;
 		if (condition.outsideCwd !== undefined && !inside !== condition.outsideCwd) return false;
@@ -137,29 +139,54 @@ function conditionMatches(condition: ConditionSpec, rawValue: unknown, ctx: Exte
 	if (condition.notMatchesAny) {
 		if (condition.notMatchesAny.some((pattern) => patternMatches(expandPatternForCondition(pattern, ctx, isPathCondition), comparableValue))) return false;
 	}
-	if (condition.equals !== undefined && comparableValue !== comparableExpectedValue(condition.equals, ctx, isPathCondition)) return false;
-	if (condition.contains !== undefined) {
-		if (typeof rawValue === "string" || isPathCondition) {
-			if (!comparableValue.includes(String(comparableExpectedValue(condition.contains, ctx, isPathCondition)))) return false;
-		} else if (Array.isArray(rawValue)) {
-			if (!rawValue.includes(condition.contains)) return false;
-		} else {
-			return false;
-		}
-	}
-	if (condition.in !== undefined && !condition.in.map((value) => comparableExpectedValue(value, ctx, isPathCondition)).includes(comparableValue)) return false;
-	if (condition.matches !== undefined && !patternMatches(expandPatternForCondition(condition.matches, ctx, isPathCondition), comparableValue)) return false;
+	if (condition.equals !== undefined && !conditionValueEquals(rawValue, condition.equals, ctx, isPathCondition)) return false;
+	if (condition.in !== undefined && !condition.in.some((value) => conditionValueEquals(rawValue, value, ctx, isPathCondition))) return false;
 	return true;
 }
 
+function hasNonExistsOperator(condition: ConditionSpec): boolean {
+	return (
+		condition.withinCwd !== undefined ||
+		condition.outsideCwd !== undefined ||
+		condition.matchesAny !== undefined ||
+		condition.notMatchesAny !== undefined ||
+		condition.startsWithAny !== undefined ||
+		condition.equals !== undefined ||
+		condition.in !== undefined
+	);
+}
+
+function conditionValueEquals(rawValue: unknown, expected: unknown, ctx: ExtensionContext, isPathCondition: boolean): boolean {
+	if (isPathCondition) {
+		if (typeof expected !== "string" || rawValue === undefined || rawValue === null) return false;
+		return comparableConditionValue(rawValue, ctx, true) === comparableExpectedValue(expected, ctx, true);
+	}
+	return jsonDeepEqual(rawValue, expected);
+}
+
 function comparableConditionValue(rawValue: unknown, ctx: ExtensionContext, isPathCondition: boolean): string {
-	if (!isPathCondition) return String(rawValue ?? "");
-	return normalizePermissionPath(String(rawValue ?? "."), ctx.cwd).replace(/\\/g, "/");
+	if (!isPathCondition) return rawValue === undefined ? "" : String(rawValue);
+	return normalizePermissionPath(String(rawValue), ctx.cwd).replace(/\\/g, "/");
 }
 
 function comparableExpectedValue(expected: unknown, ctx: ExtensionContext, isPathCondition: boolean): unknown {
 	if (!isPathCondition || typeof expected !== "string") return expected;
 	return normalizePermissionPath(expandPathLiteral(expected, ctx), ctx.cwd).replace(/\\/g, "/");
+}
+
+function jsonDeepEqual(a: unknown, b: unknown): boolean {
+	if (Object.is(a, b)) return true;
+	if (Array.isArray(a) || Array.isArray(b)) {
+		return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, index) => jsonDeepEqual(value, b[index]));
+	}
+	if (isPlainObject(a) || isPlainObject(b)) {
+		if (!isPlainObject(a) || !isPlainObject(b)) return false;
+		const aEntries = Object.entries(a).filter(([, value]) => value !== undefined);
+		const bEntries = Object.entries(b).filter(([, value]) => value !== undefined);
+		if (aEntries.length !== bEntries.length) return false;
+		return aEntries.every(([key, value]) => Object.prototype.hasOwnProperty.call(b, key) && jsonDeepEqual(value, b[key]));
+	}
+	return false;
 }
 
 function expandPatternForCondition(pattern: string, ctx: ExtensionContext, isPathCondition: boolean): string {

@@ -272,14 +272,16 @@ V1 condition types should cover common safe cases:
   - `notMatchesAny: [...]`
 - generic JSON field conditions:
   - `equals`
-  - `contains`
   - `in`
-  - `matches`
+  - `matchesAny: [...]`
+  - `notMatchesAny: [...]`
   - `exists`
 
-All conditions in a rule are ANDed.
+Each condition object must explicitly set `field`; the surrounding condition key is only a human-readable label and is not used as an implicit field name. All conditions in a rule are ANDed. Multiple operators inside one condition object are also ANDed.
 
-`matches`, `matchesAny`, and `notMatchesAny` patterns are regexes that must match the entire comparable value. Internally they are wrapped as `^(?:pattern)$`. Use `.*` explicitly when substring-style matching is desired.
+`matchesAny` and `notMatchesAny` patterns are regexes that must match the entire comparable value. Internally they are wrapped as `^(?:pattern)$`. Use `.*` explicitly when substring-style matching is desired. Invalid regexes fall back to a small glob-like syntax where `*` matches any string and `?` matches one character.
+
+Generic JSON `equals` performs JSON-aware deep equality, preserving JSON scalar types, array order, and object keys. `in` matches when the field value is JSON-deep-equal to at least one array item. `exists: true` matches values that are neither `null` nor missing; `exists: false` matches `null` or missing values.
 
 Path checks must normalize paths safely:
 
@@ -289,6 +291,7 @@ Path checks must normalize paths safely:
 - For non-existing paths, use absolute normalized resolution.
 - A path is inside cwd only if its relative path from cwd does not start with `..` and is not absolute.
 - Path pattern comparisons should use normalized absolute path strings.
+- Missing path fields never implicitly resolve to `.`; path conditions such as `withinCwd`, `outsideCwd`, path `equals`, path `in`, `matchesAny`, and `notMatchesAny` fail when the underlying path value is missing or null. Use `exists` to test path presence explicitly.
 
 Path condition strings may use a limited set of placeholders at the start of the string:
 

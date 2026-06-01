@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { builtInGeneralAgent } from "./default-agent.ts";
 import { validatePathRulePlaceholders } from "./path-placeholders.ts";
-import type { AgentDefinition, AgentThinking, Diagnostic, LoadedAgent, LoadedConfig, MatchSpec, Rule } from "./types.ts";
+import type { AgentDefinition, AgentThinking, ConditionSpec, Diagnostic, LoadedAgent, LoadedConfig, MatchSpec, Rule } from "./types.ts";
 import { canonicalizeAgentName, formatError, isPlainObject, loadYamlLibrary } from "./utils.ts";
 
 export async function loadAgentConfig(cwd: string): Promise<LoadedConfig> {
@@ -222,6 +222,7 @@ function validateRule(value: unknown, label: string, path: string, errors: Diagn
 		errors.push({ type: "error", path, message: `\`${label}.when\` must be an object when present.` });
 		return undefined;
 	}
+	if (isPlainObject(value.when)) validateWhenConditions(value.when, label, path, errors);
 	if (value.mcp !== undefined && !isPlainObject(value.mcp)) {
 		errors.push({ type: "error", path, message: `\`${label}.mcp\` must be an object when present.` });
 		return undefined;
@@ -237,6 +238,77 @@ function validateRule(value: unknown, label: string, path: string, errors: Diagn
 		errors.push({ type: "error", path, message: `\`${label}\`: ${placeholderError}` });
 	}
 	return rule;
+}
+
+const conditionKeys = new Set([
+	"field",
+	"withinCwd",
+	"outsideCwd",
+	"matchesAny",
+	"notMatchesAny",
+	"startsWithAny",
+	"equals",
+	"in",
+	"exists",
+]);
+
+function validateWhenConditions(when: Record<string, unknown>, label: string, path: string, errors: Diagnostic[]): void {
+	for (const [conditionName, conditionValue] of Object.entries(when)) {
+		const conditionLabel = `${label}.when.${conditionName}`;
+		if (!isPlainObject(conditionValue)) {
+			errors.push({ type: "error", path, message: `\`${conditionLabel}\` must be an object.` });
+			continue;
+		}
+
+		for (const key of Object.keys(conditionValue)) {
+			if (!conditionKeys.has(key)) {
+				errors.push({ type: "error", path, message: `\`${conditionLabel}.${key}\` is not a supported condition field.` });
+			}
+		}
+
+		const condition = conditionValue as ConditionSpec;
+		if (typeof condition.field !== "string" || condition.field.length === 0) {
+			errors.push({ type: "error", path, message: `\`${conditionLabel}.field\` is required and must be a non-empty string.` });
+		}
+
+		let operatorCount = 0;
+		if (condition.withinCwd !== undefined) {
+			operatorCount++;
+			if (typeof condition.withinCwd !== "boolean") errors.push({ type: "error", path, message: `\`${conditionLabel}.withinCwd\` must be a boolean.` });
+		}
+		if (condition.outsideCwd !== undefined) {
+			operatorCount++;
+			if (typeof condition.outsideCwd !== "boolean") errors.push({ type: "error", path, message: `\`${conditionLabel}.outsideCwd\` must be a boolean.` });
+		}
+		if (condition.matchesAny !== undefined) {
+			operatorCount++;
+			if (!isStringArray(condition.matchesAny)) errors.push({ type: "error", path, message: `\`${conditionLabel}.matchesAny\` must be a string array.` });
+		}
+		if (condition.notMatchesAny !== undefined) {
+			operatorCount++;
+			if (!isStringArray(condition.notMatchesAny)) errors.push({ type: "error", path, message: `\`${conditionLabel}.notMatchesAny\` must be a string array.` });
+		}
+		if (condition.startsWithAny !== undefined) {
+			operatorCount++;
+			if (!isStringArray(condition.startsWithAny)) errors.push({ type: "error", path, message: `\`${conditionLabel}.startsWithAny\` must be a string array.` });
+		}
+		if (Object.prototype.hasOwnProperty.call(conditionValue, "equals")) operatorCount++;
+		if (condition.in !== undefined) {
+			operatorCount++;
+			if (!Array.isArray(condition.in)) errors.push({ type: "error", path, message: `\`${conditionLabel}.in\` must be an array.` });
+		}
+		if (condition.exists !== undefined) {
+			operatorCount++;
+			if (typeof condition.exists !== "boolean") errors.push({ type: "error", path, message: `\`${conditionLabel}.exists\` must be a boolean.` });
+		}
+		if (operatorCount === 0) {
+			errors.push({ type: "error", path, message: `\`${conditionLabel}\` must include at least one condition operator.` });
+		}
+	}
+}
+
+function isStringArray(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 function isValidMatchSpec(value: unknown): boolean {

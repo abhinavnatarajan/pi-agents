@@ -23,9 +23,7 @@ export interface ConditionSpec {
 	notMatchesAny?: string[];
 	startsWithAny?: string[];
 	equals?: unknown;
-	contains?: unknown;
 	in?: unknown[];
-	matches?: string;
 	exists?: boolean;
 }
 

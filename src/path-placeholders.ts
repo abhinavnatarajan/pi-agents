@@ -19,11 +19,10 @@ export function expandPathLiteral(value: string, ctx: ExtensionContext): string 
 
 export function validatePathRulePlaceholders(rule: Rule): string[] {
 	const errors: string[] = [];
-	for (const [conditionName, condition] of Object.entries(rule.when ?? {})) {
+	for (const condition of Object.values(rule.when ?? {})) {
 		if (!condition || typeof condition !== "object" || Array.isArray(condition)) continue;
 		const spec = condition as ConditionSpec;
-		const field = typeof spec.field === "string" ? spec.field : conditionName;
-		if (!isPathField(field)) continue;
+		if (typeof spec.field !== "string" || !isPathField(spec.field)) continue;
 
 		for (const value of collectStringValues(spec)) {
 			const error = validatePlaceholderString(value);
@@ -39,9 +38,7 @@ export function isPathField(field: string): boolean {
 
 function collectStringValues(spec: ConditionSpec): string[] {
 	const values: string[] = [];
-	if (typeof spec.matches === "string") values.push(spec.matches);
 	if (typeof spec.equals === "string") values.push(spec.equals);
-	if (typeof spec.contains === "string") values.push(spec.contains);
 	if (Array.isArray(spec.matchesAny)) values.push(...spec.matchesAny.filter((v): v is string => typeof v === "string"));
 	if (Array.isArray(spec.notMatchesAny)) values.push(...spec.notMatchesAny.filter((v): v is string => typeof v === "string"));
 	if (Array.isArray(spec.in)) values.push(...spec.in.filter((v): v is string => typeof v === "string"));

@@ -196,15 +196,17 @@ Condition types supported in V1:
 
 - Path conditions: `withinCwd`, `outsideCwd`, `matchesAny`, `notMatchesAny`
 - Command conditions: `startsWithAny`, `matchesAny`, `notMatchesAny`
-- Generic JSON-field conditions: `equals`, `contains`, `in`, `matches`, `exists`
+- Generic JSON-field conditions: `equals`, `in`, `matchesAny`, `notMatchesAny`, `exists`
 
-All conditions in a rule are ANDed.
+Every condition object must explicitly set `field`; the surrounding condition key is only a label. All conditions in a rule are ANDed. Multiple operators inside one condition object are also ANDed.
 
-`matches`, `matchesAny`, and `notMatchesAny` patterns are regexes that must match the entire comparable value. Internally they are wrapped as `^(?:pattern)$`. Use `.*` explicitly when you want substring-style matching.
+`matchesAny` and `notMatchesAny` patterns are regexes that must match the entire comparable value. Internally they are wrapped as `^(?:pattern)$`. Use `.*` explicitly when you want substring-style matching.
 
-Path checks strip a leading `@`, resolve relative paths against `ctx.cwd`, normalize the result, and then check containment or patterns against the normalized absolute path.
+Generic JSON `equals` uses deep JSON equality, so strings, numbers, booleans, nulls, arrays, and objects keep their types. `in` matches when the field value is deeply equal to any array item. `exists: true` matches values that are neither missing nor `null`; `exists: false` matches missing or `null` values.
 
-Path pattern placeholders are supported at the start of path condition strings in `matches`, `matchesAny`, `notMatchesAny`, `equals`, `contains`, and `in`:
+Path checks strip a leading `@`, resolve relative paths against `ctx.cwd`, normalize the result, and then check containment or patterns against the normalized absolute path. Missing or null path fields do not implicitly resolve to `.`; path conditions fail unless you are using `exists` to check presence.
+
+Path pattern placeholders are supported at the start of path condition strings in `matchesAny`, `notMatchesAny`, `equals`, and `in`:
 
 - `<env:cwd>` — the current Pi working directory.
 - `<env:home>` — the current user's home directory.

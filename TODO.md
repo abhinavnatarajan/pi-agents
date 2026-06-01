@@ -60,7 +60,7 @@ This TODO tracks planning and later implementation of the Pi agent system. It is
 - [x] Specify path condition placeholder behavior:
   - support only leading `<env:cwd>`, `<env:home>`, `<env:pi_coding_agent_dir>`, and `<env:pi_package_dir>` placeholders; no shell expansion.
 - [x] Specify regex condition matching mode:
-  - `matches`, `matchesAny`, and `notMatchesAny` use exact/full regex matching; use `.*` explicitly for substring matching.
+  - `matchesAny` and `notMatchesAny` use exact/full regex matching; use `.*` explicitly for substring matching.
 - [x] Specify whether doom-loop reset on agent switch should affect only future calls or current in-flight tracking too:
   - agent switching affects only future user-input prompts; in-flight tool calls keep current semantics, and only display status changes immediately.
 
@@ -120,7 +120,7 @@ Source discovery indicates V1 is feasible as an extension-first implementation b
 - [x] Implement no-UI behavior for `ask` as deny.
 - [x] Implement path normalization and cwd containment checks.
 - [x] Implement bash dangerous-command checks for `General`, including `ln` and nested shells.
-- [x] Implement generic JSON field matching.
+- [x] Implement generic JSON field matching with explicit `field`, JSON-aware `equals`/`in`, and regex-list matching.
 - [x] Implement MCP proxy-tool rule matching for server and remote tool names.
 - [x] Implement doom-loop detection.
 - [x] Re-resolve active agent and reapply on `/reload`.
