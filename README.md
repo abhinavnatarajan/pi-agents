@@ -184,6 +184,7 @@ Path checks strip a leading `@`, resolve relative paths against `ctx.cwd`, norma
 
 Path pattern placeholders are supported at the start of path condition strings in `matches`, `matchesAny`, `notMatchesAny`, `equals`, `contains`, and `in`:
 
+- `<env:cwd>` — the current Pi working directory.
 - `<env:home>` — the current user's home directory.
 - `<env:pi_coding_agent_dir>` — Pi's configured agent directory, respecting `PI_CODING_AGENT_DIR`.
 - `<env:pi_package_dir>` — the installed `@earendil-works/pi-coding-agent` package directory.

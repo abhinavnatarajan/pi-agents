@@ -290,6 +290,7 @@ Path checks must normalize paths safely:
 
 Path condition strings may use a limited set of placeholders at the start of the string:
 
+- `<env:cwd>`
 - `<env:home>`
 - `<env:pi_coding_agent_dir>`
 - `<env:pi_package_dir>`
@@ -492,7 +493,7 @@ Invalid YAML files should not crash Pi.
 11. V1 active-tool exposure uses the backwards scan algorithm in section 10.
 12. V1 doom-loop detection uses generic stable JSON input only, with no tool-specific normalization.
 13. Agent switching during an in-flight run only updates display status immediately; permission/tool/skill/prompt/doom-loop semantics change on the next user input.
-14. Path condition strings support only explicit leading placeholders (`<env:home>`, `<env:pi_coding_agent_dir>`, `<env:pi_package_dir>`), not general shell expansion.
+14. Path condition strings support only explicit leading placeholders (`<env:cwd>`, `<env:home>`, `<env:pi_coding_agent_dir>`, `<env:pi_package_dir>`), not general shell expansion.
 
 ## 25. Source discovery findings
 

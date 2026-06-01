@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { getAgentDir, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ConditionSpec, Rule } from "./types.ts";
 
-const placeholderNames = ["home", "pi_coding_agent_dir", "pi_package_dir"] as const;
+const placeholderNames = ["cwd", "home", "pi_coding_agent_dir", "pi_package_dir"] as const;
 type PlaceholderName = (typeof placeholderNames)[number];
 
 const placeholderPrefix = "<env:";
@@ -87,6 +87,8 @@ function isPlaceholderName(value: string): value is PlaceholderName {
 
 function placeholderValue(name: PlaceholderName, ctx: ExtensionContext): string {
 	switch (name) {
+		case "cwd":
+			return ctx.cwd;
 		case "home":
 			return homedir();
 		case "pi_coding_agent_dir":

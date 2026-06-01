@@ -58,7 +58,7 @@ This TODO tracks planning and later implementation of the Pi agent system. It is
 - [x] Specify stable JSON normalization for doom-loop detection:
   - generic stable JSON only; sort object keys, preserve array order/primitives, omit `undefined`; no tool-specific normalization.
 - [x] Specify path condition placeholder behavior:
-  - support only leading `<env:home>`, `<env:pi_coding_agent_dir>`, and `<env:pi_package_dir>` placeholders; no shell expansion.
+  - support only leading `<env:cwd>`, `<env:home>`, `<env:pi_coding_agent_dir>`, and `<env:pi_package_dir>` placeholders; no shell expansion.
 - [x] Specify whether doom-loop reset on agent switch should affect only future calls or current in-flight tracking too:
   - agent switching affects only future user-input prompts; in-flight tool calls keep current semantics, and only display status changes immediately.
 
