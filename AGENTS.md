@@ -279,6 +279,8 @@ V1 condition types should cover common safe cases:
 
 All conditions in a rule are ANDed.
 
+`matches`, `matchesAny`, and `notMatchesAny` patterns are regexes that must match the entire comparable value. Internally they are wrapped as `^(?:pattern)$`. Use `.*` explicitly when substring-style matching is desired.
+
 Path checks must normalize paths safely:
 
 - Resolve relative paths against `ctx.cwd`.

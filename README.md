@@ -180,6 +180,8 @@ Condition types supported in V1:
 
 All conditions in a rule are ANDed.
 
+`matches`, `matchesAny`, and `notMatchesAny` patterns are regexes that must match the entire comparable value. Internally they are wrapped as `^(?:pattern)$`. Use `.*` explicitly when you want substring-style matching.
+
 Path checks strip a leading `@`, resolve relative paths against `ctx.cwd`, normalize the result, and then check containment or patterns against the normalized absolute path.
 
 Path pattern placeholders are supported at the start of path condition strings in `matches`, `matchesAny`, `notMatchesAny`, `equals`, `contains`, and `in`:
