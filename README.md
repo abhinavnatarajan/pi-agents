@@ -76,6 +76,26 @@ Switch directly:
 
 Interactive mode opens a selector when `/agents` has no argument. Print/JSON/RPC/no-UI mode returns a plain-text list with the active agent marked.
 
+### Optional keybindings
+
+This extension also recognizes three optional action ids in `$PI_CODING_AGENT_DIR/keybindings.json`. No default keys are registered; add bindings yourself if you want them:
+
+```json
+{
+  "app.agent.select": "ctrl+alt+a",
+  "app.agent.cycleForward": "ctrl+alt+]",
+  "app.agent.cycleBackward": "ctrl+alt+["
+}
+```
+
+Actions:
+
+- `app.agent.select` — open the agent selector.
+- `app.agent.cycleForward` — switch to the next agent by display-name order.
+- `app.agent.cycleBackward` — switch to the previous agent by display-name order.
+
+After editing `keybindings.json`, run `/reload` or restart Pi.
+
 Switching while an agent run is in flight only changes the visible status immediately. Tool permissions, prompt composition, skill permissions, and doom-loop tracking for the in-flight run continue unchanged. The newly selected agent applies to the next user-submitted prompt.
 
 ## YAML schema

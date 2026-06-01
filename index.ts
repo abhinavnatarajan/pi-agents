@@ -2,12 +2,12 @@ import type { Model } from "@earendil-works/pi-ai";
 import type {
 	BeforeAgentStartEvent,
 	ExtensionAPI,
-	ExtensionCommandContext,
 	ExtensionContext,
 	InputEvent,
 	ToolCallEvent,
 } from "@earendil-works/pi-coding-agent";
 import { loadAgentConfig } from "./src/config-loader.ts";
+import { loadAgentActionKeybindings } from "./src/keybinding-actions.ts";
 import { builtInGeneralAgent } from "./src/default-agent.ts";
 import { applyDoomLoop, askPermission, evaluateRules, shouldExposeTool } from "./src/permissions.ts";
 import { buildPermissionsSummary, filterSkillPromptBlock } from "./src/prompt.ts";
@@ -86,7 +86,7 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 		runState = { agentKey: agent.canonicalName, doomCounts: new Map() };
 	}
 
-	async function switchAgent(key: string, ctx: ExtensionCommandContext): Promise<string> {
+	async function switchAgent(key: string, ctx: ExtensionContext): Promise<string> {
 		const agent = config.agents.get(key);
 		if (!agent) {
 			const available = [...config.agents.values()].map((a) => a.name).sort().join(", ");
@@ -95,6 +95,10 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 			return message;
 		}
 
+		return await activateAgent(agent, ctx);
+	}
+
+	async function activateAgent(agent: LoadedAgent, ctx: ExtensionContext): Promise<string> {
 		selectedAgentKey = agent.canonicalName;
 		pi.appendEntry(EXTENSION_STATE_TYPE, { name: agent.name });
 		updateStatus(ctx);
@@ -104,6 +108,39 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 		const message = `Using agent: ${agent.name}`;
 		if (ctx.hasUI) ctx.ui.notify(message, "info");
 		return message;
+	}
+
+	async function cycleAgent(direction: 1 | -1, ctx: ExtensionContext): Promise<void> {
+		const agents = getAgentOrder();
+		if (agents.length === 0) return;
+		const currentIndex = agents.findIndex((agent) => agent.canonicalName === selectedAgentKey);
+		const nextIndex = currentIndex === -1 ? 0 : (currentIndex + direction + agents.length) % agents.length;
+		await activateAgent(agents[nextIndex]!, ctx);
+	}
+
+	function getAgentOrder(): LoadedAgent[] {
+		return [...config.agents.values()].sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	async function showAgentSelector(ctx: ExtensionContext): Promise<void> {
+		const agents = getAgentOrder();
+		if (agents.length === 0) return;
+		const options = agents.map((agent) => `${agent.name} - ${agent.description}`);
+		const choice = await ctx.ui.select("Select agent", options);
+		if (!choice) return;
+		const name = choice.split(" - ")[0]!;
+		await switchAgent(canonicalizeAgentName(name), ctx);
+	}
+
+	for (const binding of loadAgentActionKeybindings()) {
+		pi.registerShortcut(binding.key, {
+			description: binding.description,
+			handler: async (ctx) => {
+				if (binding.action === "app.agent.select") await showAgentSelector(ctx);
+				else if (binding.action === "app.agent.cycleForward") await cycleAgent(1, ctx);
+				else await cycleAgent(-1, ctx);
+			},
+		});
 	}
 
 	pi.registerCommand("agents", {
@@ -125,13 +162,7 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 				return;
 			}
 
-			const options = [...config.agents.values()]
-				.sort((a, b) => a.name.localeCompare(b.name))
-				.map((agent) => `${agent.name} - ${agent.description}`);
-			const choice = await ctx.ui.select("Select agent", options);
-			if (!choice) return;
-			const name = choice.split(" - ")[0]!;
-			await switchAgent(canonicalizeAgentName(name), ctx);
+			await showAgentSelector(ctx);
 		},
 	});
 
