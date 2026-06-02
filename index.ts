@@ -9,8 +9,8 @@ import type {
 import { loadAgentConfig } from "./src/config-loader.ts";
 import { loadAgentActionKeybindings } from "./src/keybinding-actions.ts";
 import { builtInGeneralAgent } from "./src/default-agent.ts";
-import { applyDoomLoop, askPermission, evaluateRules, shouldExposeTool } from "./src/permissions.ts";
-import { buildPermissionsSummary, filterSkillPromptBlock } from "./src/prompt.ts";
+import { applyDoomLoop, askPermission, evalToolPermissions, shouldExposeTool, evalSkillPermissions } from "./src/evaluate-permissions.ts";
+import { filterSkillPromptBlock } from "./src/prompt.ts";
 import { findRestoredAgentKey, formatAgentList, skillNameFromInput } from "./src/session-state.ts";
 import { EXTENSION_STATE_TYPE, STATUS_KEY, type LoadedAgent, type LoadedConfig, type RunState } from "./src/types.ts";
 import { canonicalizeAgentName, emitNoUiText } from "./src/utils.ts";
@@ -31,7 +31,7 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 
 	function updateStatus(ctx: ExtensionContext): void {
 		const agent = getSelectedAgent();
-		ctx.ui.setStatus(STATUS_KEY, `use agent: ${agent.name}`);
+		ctx.ui.setStatus(STATUS_KEY, `Agent: ${agent.name}`);
 	}
 
 	async function notifyDiagnostics(ctx: ExtensionContext): Promise<void> {
@@ -48,34 +48,32 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 			.map((tool) => tool.name);
 		pi.setActiveTools(activeTools);
 
-		if (agent.models?.default && agent.models.default !== "*") {
-			const selected = await selectConfiguredModel(agent, ctx);
-			if (!selected) {
-				ctx.ui.notify(`Agent "${agent.name}": no configured model/fallback is available; keeping current model.`, "warning");
-			}
-		}
-		if (agent.models?.thinking && agent.models.thinking !== "*") {
-			pi.setThinkingLevel(agent.models.thinking);
+		const selected = await selectConfiguredModel(agent, ctx);
+		if (!selected) {
+			ctx.ui.notify(`Agent "${agent.name}": no configured model/fallback is available; keeping current model.`, "warning");
 		}
 		runtimeAppliedAgentKey = agent.canonicalName;
 	}
 
 	async function selectConfiguredModel(agent: LoadedAgent, ctx: ExtensionContext): Promise<boolean> {
-		const candidates = [agent.models?.default, ...(agent.models?.fallbacks ?? [])].filter(
-			(m): m is string => typeof m === "string" && m !== "*",
-		);
+		if (agent.models == undefined) return true;
+		const candidates = [agent.models.default, ...(agent.models.fallbacks ?? [])];
 		for (const spec of candidates) {
-			const [provider, ...modelParts] = spec.split("/");
-			const modelId = modelParts.join("/");
-			const model = ctx.modelRegistry.find(provider!, modelId) as Model<any> | undefined;
+			const model = ctx.modelRegistry.find(spec.provider, spec.modelId) as Model<any> | undefined;
 			if (!model) continue;
 			const ok = await pi.setModel(model);
+			if (spec.thinking != null) pi.setThinkingLevel(spec.thinking);
 			if (ok) {
-				if (spec !== agent.models?.default) ctx.ui.notify(`Agent "${agent.name}": selected fallback model ${spec}.`, "warning");
+				if (spec.provider !== agent.models.default.provider) {
+					ctx.ui.notify(`Agent "${agent.name}": selected fallback provider ${spec.provider}.`, "warning");
+				}
+				if (spec.modelId !== agent.models.default.modelId) {
+					ctx.ui.notify(`Agent "${agent.name}": selected fallback model ${spec}.`, "warning");
+				}
 				return true;
 			}
 		}
-		return candidates.length === 0;
+		return false;
 	}
 
 	async function prepareNextRun(ctx: ExtensionContext): Promise<void> {
@@ -189,16 +187,15 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 		if (!skillName) return { action: "continue" as const };
 
 		const agent = getRunAgent();
-		const decision = evaluateRules(agent.skills?.rules, skillName, { name: skillName }, ctx);
+		const decision = evalSkillPermissions(agent.skillPermissions, skillName);
 		if (decision.permission === "allow") return { action: "continue" as const };
 		if (decision.permission === "deny") {
-			ctx.ui.notify(`Agent "${agent.name}" denied skill "${skillName}".`, "warning");
+			ctx.ui.notify(`Skill "${skillName}" blocked due to permission policy for agent "${agent.name}".`, "warning");
 			return { action: "handled" as const };
 		}
 
-		const ok = await askPermission(ctx, agent, "skill", skillName, { skill: skillName }, decision.reason);
+		const ok = await askPermission(ctx, agent, "skill", skillName, { skill: skillName });
 		if (ok) return { action: "continue" as const };
-		ctx.ui.notify(`Skill "${skillName}" blocked by agent "${agent.name}".`, "warning");
 		return { action: "handled" as const };
 	});
 
@@ -208,8 +205,8 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 		}
 
 		const agent = getRunAgent();
-		let systemPrompt = filterSkillPromptBlock(event.systemPrompt, event.systemPromptOptions.skills, agent, ctx);
-		const additions = [agent.prompt?.trim(), buildPermissionsSummary(agent)].filter((s): s is string => !!s);
+		let systemPrompt = filterSkillPromptBlock(event.systemPrompt, event.systemPromptOptions.skills, agent);
+		const additions = [agent.prompt?.trim()].filter((s): s is string => !!s);
 		if (additions.length > 0) systemPrompt += `\n\n${additions.join("\n\n")}`;
 		return { systemPrompt };
 	});
@@ -228,16 +225,19 @@ export default function agentSystemExtension(pi: ExtensionAPI) {
 			runState,
 			event.toolName,
 			input,
-			evaluateRules(agent.tools?.rules, event.toolName, input, ctx),
+			evalToolPermissions(agent.toolPermissions, event.toolName, input, ctx),
 		);
 
 		if (decision.permission === "allow") return undefined;
 		if (decision.permission === "deny") {
-			return { block: true, reason: decision.reason ?? `Agent "${agent.name}" denied tool "${event.toolName}".` };
+			let msg = `Tool "${event.toolName}" blocked due to permission policy for agent "${agent.name}".`;
+			if (decision.reason) msg = msg + `\nReason: ${decision.reason}`;
+			ctx.ui.notify(msg, "warning");
+			return { block: true, reason: msg };
 		}
 
-		const ok = await askPermission(ctx, agent, "tool", event.toolName, input, decision.reason);
-		if (!ok) return { block: true, reason: `Agent "${agent.name}" blocked tool "${event.toolName}".` };
+		const ok = await askPermission(ctx, agent, "tool", event.toolName, input);
+		if (!ok) return { block: true, reason: `User blocked tool "${event.toolName}".` };
 		return undefined;
 	});
 }

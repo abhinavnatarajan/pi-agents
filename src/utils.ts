@@ -1,4 +1,5 @@
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 export function canonicalizeAgentName(name: string): string {
@@ -7,6 +8,33 @@ export function canonicalizeAgentName(name: string): string {
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function getNestedFieldValue(input: Record<string, unknown>, field: string): unknown {
+	const parts = field.split(".");
+	let current: unknown = input;
+	for (const part of parts) {
+		if (!isPlainObject(current) || !(part in current)) {
+			return undefined;
+		}
+		current = current[part];
+	}
+	return current;
+}
+
+export function jsonDeepEqual(a: unknown, b: unknown): boolean {
+	if (Object.is(a, b)) return true;
+	if (Array.isArray(a) || Array.isArray(b)) {
+		return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, index) => jsonDeepEqual(value, b[index]));
+	}
+	if (isPlainObject(a) || isPlainObject(b)) {
+		if (!isPlainObject(a) || !isPlainObject(b)) return false;
+		const aEntries = Object.entries(a).filter(([, value]) => value !== undefined);
+		const bEntries = Object.entries(b).filter(([, value]) => value !== undefined);
+		if (aEntries.length !== bEntries.length) return false;
+		return aEntries.every(([key, value]) => Object.prototype.hasOwnProperty.call(b, key) && jsonDeepEqual(value, b[key]));
+	}
+	return false;
 }
 
 export function formatError(error: unknown): string {
@@ -24,12 +52,12 @@ export function safeJson(value: unknown): string {
 export async function loadYamlLibrary(): Promise<{ parse: (text: string) => unknown }> {
 	try {
 		return (await import("yaml")) as { parse: (text: string) => unknown };
-	} catch {}
+	} catch { }
 
 	const require = createRequire(import.meta.url);
 	try {
 		return require("yaml") as { parse: (text: string) => unknown };
-	} catch {}
+	} catch { }
 
 	const homePiYaml = process.env.HOME
 		? join(process.env.HOME, "node_modules", "@earendil-works", "pi-coding-agent", "node_modules", "yaml")
@@ -37,7 +65,7 @@ export async function loadYamlLibrary(): Promise<{ parse: (text: string) => unkn
 	if (homePiYaml) {
 		try {
 			return require(homePiYaml) as { parse: (text: string) => unknown };
-		} catch {}
+		} catch { }
 	}
 
 	throw new Error("Unable to load YAML parser. Run `npm install` in the agent-system extension directory to install the `yaml` dependency.");
@@ -59,3 +87,17 @@ function isLikelyJsonMode(): boolean {
 export function packageRelativeDir(metaUrl: string): string {
 	return dirname(new URL(metaUrl).pathname);
 }
+
+let cachedPiPackageDir: string | undefined
+export function getPiPackageDir(): string {
+	if (cachedPiPackageDir) return cachedPiPackageDir;
+	try {
+		const resolved = import.meta.resolve("@earendil-works/pi-coding-agent");
+		const resolvedPath = fileURLToPath(resolved);
+		cachedPiPackageDir = resolvedPath.endsWith("/dist/index.js") ? dirname(dirname(resolvedPath)) : dirname(resolvedPath);
+		return cachedPiPackageDir;
+	} catch {
+		throw new Error("Unable to resolve <env:pi_package_dir> for path permission rule.");
+	}
+}
+

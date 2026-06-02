@@ -1,10 +1,12 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import z from "zod";
+import { parse as yamlParse } from 'yaml';
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { builtInGeneralAgent } from "./default-agent.ts";
-import { validatePathRulePlaceholders } from "./path-placeholders.ts";
-import type { AgentDefinition, AgentThinking, ConditionSpec, Diagnostic, LoadedAgent, LoadedConfig, MatchSpec, Rule } from "./types.ts";
-import { canonicalizeAgentName, formatError, isPlainObject, loadYamlLibrary } from "./utils.ts";
+import type { AgentDefinition, Diagnostic, LoadedAgent, LoadedConfig } from "./types.ts";
+import { AgentSchema } from "./types.ts";
+import { canonicalizeAgentName, formatError } from "./utils.ts";
 
 export async function loadAgentConfig(cwd: string): Promise<LoadedConfig> {
 	const diagnostics: Diagnostic[] = [];
@@ -35,7 +37,8 @@ async function loadScopeAgents(
 	for (const file of files) {
 		let parsed: unknown;
 		try {
-			parsed = await parseYamlFile(file);
+			let fileText = (await readFile(file)).toString();
+			parsed = yamlParse(fileText);
 		} catch (error) {
 			diagnostics.push({ type: "error", path: file, message: `Failed to parse YAML: ${formatError(error)}` });
 			continue;
@@ -81,17 +84,11 @@ async function listYamlFiles(dir: string): Promise<string[]> {
 	}
 }
 
-async function parseYamlFile(filePath: string): Promise<unknown> {
-	const content = await readFile(filePath, "utf8");
-	const yaml = await loadYamlLibrary();
-	return yaml.parse(content);
-}
-
 function deepMergeAgent(base: AgentDefinition, overlay: AgentDefinition): AgentDefinition {
 	const merged: AgentDefinition = { ...base, ...overlay };
 	merged.models = mergeObject(base.models, overlay.models);
-	merged.tools = { rules: [...(base.tools?.rules ?? []), ...(overlay.tools?.rules ?? [])] };
-	merged.skills = { rules: [...(base.skills?.rules ?? []), ...(overlay.skills?.rules ?? [])] };
+	merged.toolPermissions = [...(base.toolPermissions ?? []), ...(overlay.toolPermissions ?? [])];
+	merged.skillPermissions = [...(base.skillPermissions ?? []), ...(overlay.skillPermissions ?? [])];
 	merged.doomLoop = mergeObject(base.doomLoop, overlay.doomLoop);
 	return merged;
 }
@@ -104,239 +101,27 @@ function mergeObject<T extends Record<string, any> | undefined>(base: T, overlay
 }
 
 function validateAgentDefinition(value: unknown, path: string): { ok: true; agent: AgentDefinition } | { ok: false; errors: Diagnostic[] } {
-	const errors: Diagnostic[] = [];
-	if (!isPlainObject(value)) {
-		return { ok: false, errors: [{ type: "error", path, message: "Agent definition must be a YAML object." }] };
-	}
-
-	const name = value.name;
-	const description = value.description;
-	if (typeof name !== "string" || name.trim().length === 0) {
-		errors.push({ type: "error", path, message: "Agent field `name` is required and must be a non-empty string." });
-	}
-	if (typeof description !== "string" || description.trim().length === 0) {
-		errors.push({ type: "error", path, message: "Agent field `description` is required and must be a non-empty string." });
-	}
-
-	const models = validateModels(value.models, path, errors);
-	const tools = validateRuleBlock(value.tools, "tools", path, errors);
-	const skills = validateRuleBlock(value.skills, "skills", path, errors);
-	const doomLoop = validateDoomLoop(value.doomLoop, path, errors);
-
-	if (value.prompt !== undefined && typeof value.prompt !== "string") {
-		errors.push({ type: "error", path, message: "Agent field `prompt` must be a string when present." });
-	}
-
-	if (errors.some((e) => e.type === "error")) return { ok: false, errors };
-
-	return {
-		ok: true,
-		agent: {
-			name: name as string,
-			description: description as string,
-			models,
-			prompt: typeof value.prompt === "string" ? value.prompt : undefined,
-			tools,
-			skills,
-			doomLoop,
-		},
-	};
-}
-
-function validateModels(value: unknown, path: string, errors: Diagnostic[]): AgentDefinition["models"] {
-	if (value === undefined) return undefined;
-	if (!isPlainObject(value)) {
-		errors.push({ type: "error", path, message: "`models` must be an object." });
-		return undefined;
-	}
-
-	const result: AgentDefinition["models"] = {};
-	if (value.default !== undefined) {
-		if (typeof value.default !== "string" || !isValidDefaultModelString(value.default)) {
-			errors.push({ type: "error", path, message: "`models.default` must be `*` or an exact `provider/model-id` string." });
-		} else {
-			result.default = value.default;
+	try {
+		let agent: AgentDefinition = AgentSchema.parse(value);
+		return { ok: true, agent: agent };
+	} catch (error) {
+		if (error instanceof z.ZodError) {
+			let errors = error.issues.map(val => {
+				return {
+					type: "error",
+					path: path,
+					message: `${val.path}: ${val.message}`
+				} as Diagnostic;
+			});
+			return { ok: false, errors: errors };
+		}
+		return {
+			ok: false, errors: [
+				{
+					type: "error",
+					path: path,
+					message: "Unhandled exception when parsing agent definition."
+				}]
 		}
 	}
-	if (value.fallbacks !== undefined) {
-		if (!Array.isArray(value.fallbacks) || value.fallbacks.some((m) => typeof m !== "string" || !isExactModelString(m))) {
-			errors.push({ type: "error", path, message: "`models.fallbacks` must be exact `provider/model-id` strings; `*` is not valid there." });
-		} else {
-			result.fallbacks = value.fallbacks as string[];
-		}
-	}
-	if (value.thinking !== undefined) {
-		if (!["*", "off", "minimal", "low", "medium", "high", "xhigh"].includes(String(value.thinking))) {
-			errors.push({ type: "error", path, message: "`models.thinking` must be `*` or one of off, minimal, low, medium, high, xhigh." });
-		} else {
-			result.thinking = value.thinking as AgentThinking;
-		}
-	}
-	return result;
-}
-
-function isValidDefaultModelString(value: string): boolean {
-	return value === "*" || isExactModelString(value);
-}
-
-function isExactModelString(value: string): boolean {
-	if (value.includes("*")) return false;
-	const slash = value.indexOf("/");
-	return slash > 0 && slash < value.length - 1;
-}
-
-function validateRuleBlock(value: unknown, blockName: "tools" | "skills", path: string, errors: Diagnostic[]): { rules?: Rule[] } | undefined {
-	if (value === undefined) return undefined;
-	if (!isPlainObject(value)) {
-		errors.push({ type: "error", path, message: `\`${blockName}\` must be an object.` });
-		return undefined;
-	}
-	if (value.rules === undefined) return {};
-	if (!Array.isArray(value.rules)) {
-		errors.push({ type: "error", path, message: `\`${blockName}.rules\` must be an array.` });
-		return undefined;
-	}
-
-	const rules: Rule[] = [];
-	value.rules.forEach((ruleValue, index) => {
-		const rule = validateRule(ruleValue, `${blockName}.rules[${index}]`, path, errors);
-		if (rule) rules.push(rule);
-	});
-	return { rules };
-}
-
-function validateRule(value: unknown, label: string, path: string, errors: Diagnostic[]): Rule | undefined {
-	if (!isPlainObject(value)) {
-		errors.push({ type: "error", path, message: `\`${label}\` must be an object.` });
-		return undefined;
-	}
-	if (!isValidMatchSpec(value.match)) {
-		errors.push({ type: "error", path, message: `\`${label}.match\` must be a string, string array, or { regex: string }.` });
-		return undefined;
-	}
-	if (!["allow", "ask", "deny"].includes(String(value.permission))) {
-		errors.push({ type: "error", path, message: `\`${label}.permission\` must be allow, ask, or deny.` });
-		return undefined;
-	}
-	if (value.when !== undefined && !isPlainObject(value.when)) {
-		errors.push({ type: "error", path, message: `\`${label}.when\` must be an object when present.` });
-		return undefined;
-	}
-	if (isPlainObject(value.when)) validateWhenConditions(value.when, label, path, errors);
-	if (value.mcp !== undefined && !isPlainObject(value.mcp)) {
-		errors.push({ type: "error", path, message: `\`${label}.mcp\` must be an object when present.` });
-		return undefined;
-	}
-	const rule = {
-		match: value.match as MatchSpec,
-		permission: value.permission as Rule["permission"],
-		when: value.when as Record<string, any> | undefined,
-		mcp: value.mcp as { server?: string; tool?: string } | undefined,
-		reason: typeof value.reason === "string" ? value.reason : undefined,
-	};
-	for (const placeholderError of validatePathRulePlaceholders(rule)) {
-		errors.push({ type: "error", path, message: `\`${label}\`: ${placeholderError}` });
-	}
-	return rule;
-}
-
-const conditionKeys = new Set([
-	"field",
-	"withinCwd",
-	"outsideCwd",
-	"matchesAny",
-	"notMatchesAny",
-	"startsWithAny",
-	"equals",
-	"in",
-	"exists",
-]);
-
-function validateWhenConditions(when: Record<string, unknown>, label: string, path: string, errors: Diagnostic[]): void {
-	for (const [conditionName, conditionValue] of Object.entries(when)) {
-		const conditionLabel = `${label}.when.${conditionName}`;
-		if (!isPlainObject(conditionValue)) {
-			errors.push({ type: "error", path, message: `\`${conditionLabel}\` must be an object.` });
-			continue;
-		}
-
-		for (const key of Object.keys(conditionValue)) {
-			if (!conditionKeys.has(key)) {
-				errors.push({ type: "error", path, message: `\`${conditionLabel}.${key}\` is not a supported condition field.` });
-			}
-		}
-
-		const condition = conditionValue as ConditionSpec;
-		if (typeof condition.field !== "string" || condition.field.length === 0) {
-			errors.push({ type: "error", path, message: `\`${conditionLabel}.field\` is required and must be a non-empty string.` });
-		}
-
-		let operatorCount = 0;
-		if (condition.withinCwd !== undefined) {
-			operatorCount++;
-			if (typeof condition.withinCwd !== "boolean") errors.push({ type: "error", path, message: `\`${conditionLabel}.withinCwd\` must be a boolean.` });
-		}
-		if (condition.outsideCwd !== undefined) {
-			operatorCount++;
-			if (typeof condition.outsideCwd !== "boolean") errors.push({ type: "error", path, message: `\`${conditionLabel}.outsideCwd\` must be a boolean.` });
-		}
-		if (condition.matchesAny !== undefined) {
-			operatorCount++;
-			if (!isStringArray(condition.matchesAny)) errors.push({ type: "error", path, message: `\`${conditionLabel}.matchesAny\` must be a string array.` });
-		}
-		if (condition.notMatchesAny !== undefined) {
-			operatorCount++;
-			if (!isStringArray(condition.notMatchesAny)) errors.push({ type: "error", path, message: `\`${conditionLabel}.notMatchesAny\` must be a string array.` });
-		}
-		if (condition.startsWithAny !== undefined) {
-			operatorCount++;
-			if (!isStringArray(condition.startsWithAny)) errors.push({ type: "error", path, message: `\`${conditionLabel}.startsWithAny\` must be a string array.` });
-		}
-		if (Object.prototype.hasOwnProperty.call(conditionValue, "equals")) operatorCount++;
-		if (condition.in !== undefined) {
-			operatorCount++;
-			if (!Array.isArray(condition.in)) errors.push({ type: "error", path, message: `\`${conditionLabel}.in\` must be an array.` });
-		}
-		if (condition.exists !== undefined) {
-			operatorCount++;
-			if (typeof condition.exists !== "boolean") errors.push({ type: "error", path, message: `\`${conditionLabel}.exists\` must be a boolean.` });
-		}
-		if (operatorCount === 0) {
-			errors.push({ type: "error", path, message: `\`${conditionLabel}\` must include at least one condition operator.` });
-		}
-	}
-}
-
-function isStringArray(value: unknown): value is string[] {
-	return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
-
-function isValidMatchSpec(value: unknown): boolean {
-	if (typeof value === "string") return value.length > 0;
-	if (Array.isArray(value)) return value.length > 0 && value.every((v) => typeof v === "string" && v.length > 0);
-	return isPlainObject(value) && typeof value.regex === "string" && value.regex.length > 0;
-}
-
-function validateDoomLoop(value: unknown, path: string, errors: Diagnostic[]): AgentDefinition["doomLoop"] {
-	if (value === undefined) return undefined;
-	if (!isPlainObject(value)) {
-		errors.push({ type: "error", path, message: "`doomLoop` must be an object." });
-		return undefined;
-	}
-	const result: AgentDefinition["doomLoop"] = {};
-	if (value.threshold !== undefined) {
-		if (typeof value.threshold !== "number" || !Number.isInteger(value.threshold) || value.threshold < 1) {
-			errors.push({ type: "error", path, message: "`doomLoop.threshold` must be a positive integer." });
-		} else {
-			result.threshold = value.threshold;
-		}
-	}
-	if (value.permission !== undefined) {
-		if (!["allow", "ask", "deny"].includes(String(value.permission))) {
-			errors.push({ type: "error", path, message: "`doomLoop.permission` must be allow, ask, or deny." });
-		} else {
-			result.permission = value.permission as Rule["permission"];
-		}
-	}
-	return result;
 }
