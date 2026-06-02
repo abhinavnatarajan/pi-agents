@@ -1,15 +1,15 @@
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import z from "zod";
 import { parse as yamlParse } from 'yaml';
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import z from "zod";
 import { builtInGeneralAgent } from "./default-agent.ts";
 import type { AgentDefinition, Diagnostic, LoadedAgent, LoadedConfig } from "./types.ts";
 import { AgentSchema } from "./types.ts";
 import { canonicalizeAgentName, formatError } from "./utils.ts";
 
-export async function loadAgentConfig(cwd: string): Promise<LoadedConfig> {
-	const diagnostics: Diagnostic[] = [];
+export async function loadAgentConfig(cwd : string) : Promise<LoadedConfig> {
+	const diagnostics : Diagnostic[] = [];
 	const agents = new Map<string, LoadedAgent>();
 	const builtIn = builtInGeneralAgent();
 	agents.set(builtIn.canonicalName, builtIn);
@@ -26,26 +26,26 @@ export async function loadAgentConfig(cwd: string): Promise<LoadedConfig> {
 }
 
 async function loadScopeAgents(
-	scope: "global" | "project",
-	dir: string,
-	agents: Map<string, LoadedAgent>,
-	diagnostics: Diagnostic[],
-): Promise<void> {
+	scope : "global" | "project",
+	dir : string,
+	agents : Map<string, LoadedAgent>,
+	diagnostics : Diagnostic[],
+) : Promise<void> {
 	const files = await listYamlFiles(dir);
 	const seenInScope = new Map<string, string>();
 
-	for (const file of files) {
-		let parsed: unknown;
+	for(const file of files) {
+		let parsed : unknown;
 		try {
 			let fileText = (await readFile(file)).toString();
 			parsed = yamlParse(fileText);
-		} catch (error) {
+		} catch(error) {
 			diagnostics.push({ type: "error", path: file, message: `Failed to parse YAML: ${formatError(error)}` });
 			continue;
 		}
 
 		const validation = validateAgentDefinition(parsed, file);
-		if (!validation.ok) {
+		if(!validation.ok) {
 			diagnostics.push(...validation.errors);
 			continue;
 		}
@@ -53,7 +53,7 @@ async function loadScopeAgents(
 		const def = validation.agent;
 		const key = canonicalizeAgentName(def.name);
 		const previousInScope = seenInScope.get(key);
-		if (previousInScope) {
+		if(previousInScope) {
 			diagnostics.push({
 				type: "warning",
 				path: file,
@@ -63,16 +63,16 @@ async function loadScopeAgents(
 		seenInScope.set(key, file);
 
 		const existing = agents.get(key);
-		if (existing) {
+		if(existing) {
 			const merged = deepMergeAgent(existing, def);
-			agents.set(key, { ...merged, canonicalName: key, sources: [...existing.sources, file], builtIn: existing.builtIn });
+			agents.set(key, { ...merged, canonicalName: key, sources: [ ...existing.sources, file ], builtIn: existing.builtIn });
 		} else {
-			agents.set(key, { ...def, canonicalName: key, sources: [file] });
+			agents.set(key, { ...def, canonicalName: key, sources: [ file ] });
 		}
 	}
 }
 
-async function listYamlFiles(dir: string): Promise<string[]> {
+async function listYamlFiles(dir : string) : Promise<string[]> {
 	try {
 		const entries = await readdir(dir, { withFileTypes: true });
 		return entries
@@ -84,28 +84,28 @@ async function listYamlFiles(dir: string): Promise<string[]> {
 	}
 }
 
-function deepMergeAgent(base: AgentDefinition, overlay: AgentDefinition): AgentDefinition {
-	const merged: AgentDefinition = { ...base, ...overlay };
+function deepMergeAgent(base : AgentDefinition, overlay : AgentDefinition) : AgentDefinition {
+	const merged : AgentDefinition = { ...base, ...overlay };
 	merged.models = mergeObject(base.models, overlay.models);
-	merged.toolPermissions = [...(base.toolPermissions ?? []), ...(overlay.toolPermissions ?? [])];
-	merged.skillPermissions = [...(base.skillPermissions ?? []), ...(overlay.skillPermissions ?? [])];
+	merged.toolPermissions = [ ...(base.toolPermissions ?? []), ...(overlay.toolPermissions ?? []) ];
+	merged.skillPermissions = [ ...(base.skillPermissions ?? []), ...(overlay.skillPermissions ?? []) ];
 	merged.doomLoop = mergeObject(base.doomLoop, overlay.doomLoop);
 	return merged;
 }
 
-function mergeObject<T extends Record<string, any> | undefined>(base: T, overlay: T): T {
-	if (!base && !overlay) return undefined as T;
-	if (!base) return overlay;
-	if (!overlay) return base;
+function mergeObject<T extends Record<string, any> | undefined>(base : T, overlay : T) : T {
+	if(!base && !overlay) return undefined as T;
+	if(!base) return overlay;
+	if(!overlay) return base;
 	return { ...base, ...overlay } as T;
 }
 
-function validateAgentDefinition(value: unknown, path: string): { ok: true; agent: AgentDefinition } | { ok: false; errors: Diagnostic[] } {
+function validateAgentDefinition(value : unknown, path : string) : { ok : true; agent : AgentDefinition; } | { ok : false; errors : Diagnostic[]; } {
 	try {
-		let agent: AgentDefinition = AgentSchema.parse(value);
+		let agent : AgentDefinition = AgentSchema.parse(value);
 		return { ok: true, agent: agent };
-	} catch (error) {
-		if (error instanceof z.ZodError) {
+	} catch(error) {
+		if(error instanceof z.ZodError) {
 			let errors = error.issues.map(val => {
 				return {
 					type: "error",
@@ -121,7 +121,7 @@ function validateAgentDefinition(value: unknown, path: string): { ok: true; agen
 					type: "error",
 					path: path,
 					message: "Unhandled exception when parsing agent definition."
-				}]
-		}
+				} ]
+		};
 	}
 }

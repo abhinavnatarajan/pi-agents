@@ -1,13 +1,13 @@
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import z from "zod";
 import { Condition, ConditionResult, ConditionSchema } from "./conditions.ts";
-export * from "./conditions.ts";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getNestedFieldValue } from "./utils.ts";
+export * from "./conditions.ts";
 export { ConditionResult, ConditionSchema } from "./conditions.ts";
 export const EXTENSION_STATE_TYPE = "agent-system-state";
 export const STATUS_KEY = "agent";
 
-const NonEmptyString = z.string().trim().min(1)
+const NonEmptyString = z.string().trim().min(1);
 const AgentThinkingSchema = z.union([
 	z.literal("off"),
 	z.literal("minimal"),
@@ -20,12 +20,12 @@ const ModelSchema = z.object({
 	provider: NonEmptyString,
 	modelId: NonEmptyString,
 	thinking: AgentThinkingSchema.optional()
-})
-const PermissionSchema = z.union([z.literal("allow"), z.literal("ask"), z.literal("deny")]);
+});
+const PermissionSchema = z.union([ z.literal("allow"), z.literal("ask"), z.literal("deny") ]);
 export type Permission = z.infer<typeof PermissionSchema>;
 
-const ToolOrSkillNamePatternsSchema = z.union([NonEmptyString, z.array(NonEmptyString).min(1)]).transform((val, ctx) => {
-	if (typeof (val) === "string") val = [val];
+const ToolOrSkillNamePatternsSchema = z.union([ NonEmptyString, z.array(NonEmptyString).min(1) ]).transform((val, ctx) => {
+	if(typeof (val) === "string") val = [ val ];
 	return val.map((pattern) => {
 		try {
 			return new RegExp(`^(?:${pattern})$`);
@@ -34,32 +34,32 @@ const ToolOrSkillNamePatternsSchema = z.union([NonEmptyString, z.array(NonEmptyS
 				message: "Invalid regular expression.",
 				input: pattern,
 				code: "custom"
-			})
+			});
 			return null;
 		}
 	}).filter((regexp) => regexp != null);
 });
 
 export class ToolPermission {
-	matchPatterns: RegExp[];
-	permission: Permission;
-	conditions?: Condition[];
-	constructor(matchPatterns: RegExp[], permission: Permission, conditions?: Condition[]) {
+	matchPatterns : RegExp[];
+	permission : Permission;
+	conditions ? : Condition[];
+	constructor (matchPatterns : RegExp[], permission : Permission, conditions ?: Condition[]) {
 		this.matchPatterns = matchPatterns;
 		this.permission = permission;
 		this.conditions = conditions;
 	}
-	matchesTool(tool: string) {
+	matchesTool(tool : string) {
 		return this.matchPatterns.some((regexp) => regexp.test(tool));
 	}
-	evalToolCall(tool: string, params: Record<string, unknown>, ctx: ExtensionContext): Decision | undefined {
-		if (!this.matchesTool(tool)) return undefined;
-		if (this.conditions == null) {
-			if (this.permission === "deny") {
+	evalToolCall(tool : string, params : Record<string, unknown>, ctx : ExtensionContext) : Decision | undefined {
+		if(!this.matchesTool(tool)) return undefined;
+		if(this.conditions == null) {
+			if(this.permission === "deny") {
 				return {
 					permission: "deny",
 					reason: `Tool "${tool}" denied.`
-				}
+				};
 			}
 			return {
 				permission: this.permission,
@@ -72,7 +72,7 @@ export class ToolPermission {
 			new ConditionResult(true)
 		);
 		// Some condition in the rule matches the call
-		if (result.ok) return {
+		if(result.ok) return {
 			permission: this.permission,
 			reason: this.permission === "deny" ? result.reason : undefined,
 		};
@@ -87,21 +87,21 @@ const ToolPermissionSchema = z.object({
 }).transform(val => new ToolPermission(val.matchPatterns, val.permission, val.conditions));
 
 export class SkillPermission {
-	matchPatterns: RegExp[];
-	permission: Permission;
-	constructor(matchPatterns: RegExp[], permission: Permission) {
+	matchPatterns : RegExp[];
+	permission : Permission;
+	constructor (matchPatterns : RegExp[], permission : Permission) {
 		this.matchPatterns = matchPatterns;
 		this.permission = permission;
 	}
-	matchesSkill(skill: string) {
+	matchesSkill(skill : string) {
 		return this.matchPatterns.some((regexp) => regexp.test(skill));
 	}
-	evalSkillCall(skill: string) {
-		if (!this.matchesSkill(skill)) return undefined;
+	evalSkillCall(skill : string) {
+		if(!this.matchesSkill(skill)) return undefined;
 		return {
 			permission: this.permission,
 			reason: this.permission === "deny" ? `Skill "${skill}" not allowed.` : undefined,
-		}
+		};
 	}
 }
 const SkillPermissionSchema = z.object({
@@ -127,28 +127,28 @@ export const AgentSchema = z.object({
 export type AgentDefinition = z.infer<typeof AgentSchema>;
 
 export interface LoadedAgent extends AgentDefinition {
-	canonicalName: string;
-	sources: string[];
-	builtIn?: boolean;
+	canonicalName : string;
+	sources : string[];
+	builtIn ?: boolean;
 }
 
 export interface Diagnostic {
-	type: "warning" | "error";
-	message: string;
-	path?: string;
+	type : "warning" | "error";
+	message : string;
+	path ?: string;
 }
 
 export interface LoadedConfig {
-	agents: Map<string, LoadedAgent>;
-	diagnostics: Diagnostic[];
+	agents : Map<string, LoadedAgent>;
+	diagnostics : Diagnostic[];
 }
 
 export type Decision = {
-	permission: Permission
-	reason?: string;
+	permission : Permission;
+	reason ?: string;
 };
 
 export interface RunState {
-	agentKey: string;
-	doomCounts: Map<string, number>;
+	agentKey : string;
+	doomCounts : Map<string, number>;
 }

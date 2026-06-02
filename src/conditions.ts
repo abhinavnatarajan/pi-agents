@@ -1,41 +1,41 @@
-import { jsonDeepEqual, getPiPackageDir, } from "./utils.ts";
+import { getAgentDir, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { homedir } from "node:os";
-import { type ExtensionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
-import z from "zod";
 import { isAbsolute, relative, resolve } from 'node:path';
+import z from "zod";
+import { getPiPackageDir, jsonDeepEqual, } from "./utils.ts";
 
-const NonEmptyString = z.string().trim().min(1)
+const NonEmptyString = z.string().trim().min(1);
 export class ConditionResult {
-	ok: boolean;
-	reason?: string;
-	constructor(ok: boolean, reason?: string) {
+	ok : boolean;
+	reason ? : string;
+	constructor (ok : boolean, reason ?: string) {
 		this.ok = ok;
 		this.reason = reason;
 	}
-	andThen(other: () => ConditionResult): ConditionResult {
-		if (!this.ok) return this;
+	andThen(other : () => ConditionResult) : ConditionResult {
+		if(!this.ok) return this;
 		return other();
 	}
 
 }
 export interface Condition {
-	readonly field: string;
-	readonly eval: (rawInput: unknown, ctx: ExtensionContext) => ConditionResult;
+	readonly field : string;
+	readonly eval : (rawInput : unknown, ctx : ExtensionContext) => ConditionResult;
 }
 
 export class Exists implements Condition {
-	readonly field: string;
-	private readonly returnTrue: boolean;
-	readonly eval: (rawInput: unknown) => ConditionResult;
-	constructor(field: string, returnTrue: boolean) {
+	readonly field : string;
+	private readonly returnTrue : boolean;
+	readonly eval : (rawInput : unknown) => ConditionResult;
+	constructor (field : string, returnTrue : boolean) {
 		this.field = field;
 		this.returnTrue = returnTrue;
-		this.eval = (rawInput: unknown) => {
+		this.eval = (rawInput : unknown) => {
 			const exists = (rawInput != null);
 			let ok = (this.returnTrue && exists) || (!this.returnTrue && !exists);
-			if (ok) return new ConditionResult(true);
+			if(ok) return new ConditionResult(true);
 			return new ConditionResult(false, `Param '${this.field}' needs to exist.`);
-		}
+		};
 	}
 }
 export const ExistsSchema = z.object({
@@ -44,22 +44,22 @@ export const ExistsSchema = z.object({
 }).transform(val => new Exists(val.field, val.exists));
 
 export class EqualsAny implements Condition {
-	readonly field: string;
-	private readonly exists: Exists;
-	private readonly valuesToCheck: unknown[];
-	readonly eval: (rawInput: unknown) => ConditionResult;
-	constructor(field: string, valuesToCheck: unknown[]) {
+	readonly field : string;
+	private readonly exists : Exists;
+	private readonly valuesToCheck : unknown[];
+	readonly eval : (rawInput : unknown) => ConditionResult;
+	constructor (field : string, valuesToCheck : unknown[]) {
 		this.field = field;
 		this.exists = new Exists(this.field, true);
 		this.valuesToCheck = valuesToCheck;
-		this.eval = (rawInput: unknown) => {
+		this.eval = (rawInput : unknown) => {
 			return this.exists.eval(rawInput).andThen(() => {
-				if (this.valuesToCheck.some((value: unknown) => jsonDeepEqual(rawInput, value))) {
+				if(this.valuesToCheck.some((value : unknown) => jsonDeepEqual(rawInput, value))) {
 					return new ConditionResult(true);
 				};
 				return new ConditionResult(false, `${this.field} needs to be one of ${this.valuesToCheck}.`);
 			});
-		}
+		};
 	}
 }
 export const EqualsAnySchema = z.object({
@@ -68,20 +68,20 @@ export const EqualsAnySchema = z.object({
 }).transform(val => new EqualsAny(val.field, val.equalsAny));
 
 export class MatchesAny implements Condition {
-	readonly field: string;
-	private readonly exists: Exists;
-	private readonly patterns: RegExp[];
-	readonly eval: (rawInput: unknown) => ConditionResult;
-	constructor(field: string, patterns: RegExp[]) {
+	readonly field : string;
+	private readonly exists : Exists;
+	private readonly patterns : RegExp[];
+	readonly eval : (rawInput : unknown) => ConditionResult;
+	constructor (field : string, patterns : RegExp[]) {
 		this.field = field;
 		this.exists = new Exists(this.field, true);
 		this.patterns = patterns;
-		this.eval = (rawInput: unknown) => {
+		this.eval = (rawInput : unknown) => {
 			return this.exists.eval(rawInput).andThen(() => {
-				if (typeof (rawInput) === "string") return new ConditionResult(true);
+				if(typeof (rawInput) === "string") return new ConditionResult(true);
 				return new ConditionResult(false, `${this.field} needs to be a string`);
 			}).andThen(() => {
-				if (this.patterns.some((pattern) => pattern.test(rawInput as string))) return new ConditionResult(true);
+				if(this.patterns.some((pattern) => pattern.test(rawInput as string))) return new ConditionResult(true);
 				return new ConditionResult(false, `${this.field} needs to match one of the patterns in ${this.patterns}.`);
 			});
 		};
@@ -91,7 +91,7 @@ export const MatchesAnySchema = z.object({
 	field: NonEmptyString,
 	matchesAny: z.array(NonEmptyString).min(1),
 }).transform((val, ctx) => {
-	const patterns: RegExp[] = val.matchesAny.map(stringPattern => {
+	const patterns : RegExp[] = val.matchesAny.map(stringPattern => {
 		try {
 			return new RegExp(`^(?:${stringPattern})$`);
 		} catch {
@@ -99,7 +99,7 @@ export const MatchesAnySchema = z.object({
 				code: "custom",
 				message: "Invalid regular expression.",
 				input: stringPattern
-			})
+			});
 			return null;
 		}
 	}).filter(regExp => regExp != null);
@@ -107,40 +107,40 @@ export const MatchesAnySchema = z.object({
 });
 
 export class PathInAny implements Condition {
-	readonly field: string;
-	private readonly exists: Exists;
-	private pathsToCheck: string[];
-	private pathsNormalized: boolean;
-	readonly eval: (rawInput: unknown, ctx: ExtensionContext) => ConditionResult;
+	readonly field : string;
+	private readonly exists : Exists;
+	private pathsToCheck : string[];
+	private pathsNormalized : boolean;
+	readonly eval : (rawInput : unknown, ctx : ExtensionContext) => ConditionResult;
 
-	private static normalizePaths(path: string, ctx: ExtensionContext) {
+	private static normalizePaths(path : string, ctx : ExtensionContext) {
 		path = path.replace(/<env:cwd>/, ctx.cwd)
 			.replace(/^<env:home>/, homedir())
 			.replace(/^<env:pi_config_dir>/, getAgentDir())
-			.replace(/^<env:pi_package_dir>/, getPiPackageDir())
+			.replace(/^<env:pi_package_dir>/, getPiPackageDir());
 		return resolve(path);
 	}
-	constructor(field: string, pathsToCheck: string[]) {
+	constructor (field : string, pathsToCheck : string[]) {
 		this.field = field;
 		this.exists = new Exists(this.field, true);
 		this.pathsToCheck = pathsToCheck;
 		this.pathsNormalized = false;
-		this.eval = (rawInput: unknown, ctx: ExtensionContext) => {
-			if (!this.pathsNormalized) {
+		this.eval = (rawInput : unknown, ctx : ExtensionContext) => {
+			if(!this.pathsNormalized) {
 				this.pathsToCheck = this.pathsToCheck.map(path => PathInAny.normalizePaths(path, ctx));
 				this.pathsNormalized = true;
 			}
 			return this.exists.eval(rawInput).andThen(() => {
-				if (typeof (rawInput) === "string") return new ConditionResult(true);
+				if(typeof (rawInput) === "string") return new ConditionResult(true);
 				return new ConditionResult(false, `${this.field} needs to be a string`);
 			}).andThen(() => {
-				if (this.pathsToCheck.some(path => {
+				if(this.pathsToCheck.some(path => {
 					const rel = relative(path, resolve(rawInput as string));
 					return (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel)));
 				})) return new ConditionResult(true);
 				return new ConditionResult(false, `${this.field} needs to be inside one of the following paths: ${this.pathsToCheck}`);
 			});
-		}
+		};
 	}
 }
 export const PathInAnySchema = z.object({
@@ -149,33 +149,33 @@ export const PathInAnySchema = z.object({
 }).transform(val => new PathInAny(val.field, val.pathInAny));
 
 export class PathMatchesAny implements Condition {
-	readonly field: string;
-	private readonly exists: Exists;
-	private readonly patternsToCheck: RegExp[];
-	readonly eval: (rawInput: unknown, ctx: ExtensionContext) => ConditionResult;
+	readonly field : string;
+	private readonly exists : Exists;
+	private readonly patternsToCheck : RegExp[];
+	readonly eval : (rawInput : unknown, ctx : ExtensionContext) => ConditionResult;
 
-	constructor(field: string, patternsToCheck: RegExp[]) {
+	constructor (field : string, patternsToCheck : RegExp[]) {
 		this.field = field;
 		this.exists = new Exists(field, true);
 		this.patternsToCheck = patternsToCheck;
-		this.eval = (rawInput: unknown) => {
+		this.eval = (rawInput : unknown) => {
 			return this.exists.eval(rawInput).andThen(() => {
-				if (typeof (rawInput) === "string") return new ConditionResult(true);
+				if(typeof (rawInput) === "string") return new ConditionResult(true);
 				return new ConditionResult(false, `${this.field} needs to be a string`);
 			}).andThen(() => {
-				if (this.patternsToCheck.some((regexp) => regexp.test(resolve(rawInput as string)))) {
+				if(this.patternsToCheck.some((regexp) => regexp.test(resolve(rawInput as string)))) {
 					return new ConditionResult(true);
 				}
 				return new ConditionResult(false, `${this.field} needs to match one of ${this.patternsToCheck}.`);
 			});
-		}
+		};
 	}
 }
 export const PathMatchesAnySchema = z.object({
 	field: NonEmptyString,
 	pathMatchesAny: z.array(NonEmptyString).min(1)
 }).transform((val, ctx) => {
-	const patterns: RegExp[] = val.pathMatchesAny.map(stringPattern => {
+	const patterns : RegExp[] = val.pathMatchesAny.map(stringPattern => {
 		try {
 			return new RegExp(`^(?:${stringPattern})$`);
 		} catch {
@@ -183,10 +183,10 @@ export const PathMatchesAnySchema = z.object({
 				code: "custom",
 				message: "Invalid regular expression.",
 				input: stringPattern
-			})
+			});
 			return null;
 		}
 	}).filter(regExp => regExp != null);
 	return new PathMatchesAny(val.field, patterns);
 });
-export const ConditionSchema = z.union([ExistsSchema, MatchesAnySchema, EqualsAnySchema, PathMatchesAnySchema, PathInAnySchema]);
+export const ConditionSchema = z.union([ ExistsSchema, MatchesAnySchema, EqualsAnySchema, PathMatchesAnySchema, PathInAnySchema ]);

@@ -1,4 +1,4 @@
-import { LoadedAgent, ToolPermission, SkillPermission, PathInAny, MatchesAny } from "./types.ts";
+import { LoadedAgent, MatchesAny, PathInAny, SkillPermission, ToolPermission } from "./types.ts";
 
 
 export const dangerousGeneralCommands = [
@@ -25,23 +25,23 @@ export const dangerousGeneralCommands = [
 	"pwsh",
 ].map(t => new RegExp(t));
 
-export function builtInGeneralAgent(): LoadedAgent {
+export function builtInGeneralAgent() : LoadedAgent {
 	return {
 		canonicalName: "general",
 		builtIn: true,
-		sources: ["<built-in>"],
+		sources: [ "<built-in>" ],
 		name: "General",
 		description: "General-purpose coding assistant with conservative permissions.",
 		prompt: "You are the General agent. Be concise and careful.",
 		toolPermissions: [
-			new ToolPermission([/\*/], "deny"),
-			new ToolPermission([/^read$/, /^grep$/, /^find$/, /^ls$/], "allow", [new PathInAny("path", ["<env:cwd>"])]),
-			new ToolPermission([/^write$/, /^edit$/], "ask", [new PathInAny("path", ["<env:cwd>"])]),
-			new ToolPermission([/^bash$/], "ask"),
-			new ToolPermission([/^bash$/], "deny", [new MatchesAny("command", dangerousGeneralCommands)])
+			new ToolPermission([ /\*/ ], "deny"),
+			new ToolPermission([ /^read$/, /^grep$/, /^find$/, /^ls$/ ], "allow", [ new PathInAny("path", [ "<env:cwd>" ]) ]),
+			new ToolPermission([ /^write$/, /^edit$/ ], "ask", [ new PathInAny("path", [ "<env:cwd>" ]) ]),
+			new ToolPermission([ /^bash$/ ], "ask"),
+			new ToolPermission([ /^bash$/ ], "deny", [ new MatchesAny("command", dangerousGeneralCommands) ])
 		],
 		skillPermissions: [
-			new SkillPermission([/\.*/], "deny"),
+			new SkillPermission([ /\.*/ ], "deny"),
 		],
 		doomLoop: { threshold: 3, permission: "ask" },
 	};
